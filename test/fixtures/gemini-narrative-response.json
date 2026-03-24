@@ -1,0 +1,10 @@
+{
+  "caseNarrative": "On March 15, 2025, $SHADY (SHADY) on Ethereum experienced a dramatic +142.5% pump on $2.3M in volume — a move that caught the attention of The Snitch's forensic engine.\n\nThe investigation identified three suspect wallets that positioned themselves hours before the price explosion. The primary suspect, 0xaaaa...0001, began accumulating $580K worth of SHADY tokens approximately 18.5 hours before the move. This wallet, flagged as DEX-visible and traceable on-chain, demonstrated a timing advantage that is highly correlated with advance knowledge of the impending price action.\n\nWallet connection analysis revealed that Suspect #1 and Suspect #2 share a common funding source — both wallets trace back to the same origin, suggesting coordinated activity. The profiler comparison further identified 3 shared counterparties between these wallets, reinforcing the connection.\n\nThe evidence breakdown paints a compelling picture: timing scored 80/100, volume concentration hit 70/100 with the top 3 wallets controlling 42% of pre-move volume, and wallet connections scored 100/100 due to the same-funding link. The primary suspect realized $1.2M in profit, a staggering +850% return.\n\nWith a suspicion score of 82/100, this case warrants further investigation. The combination of precise timing, concentrated volume, and provable wallet connections makes this one of the more notable cases The Snitch has flagged.",
+  "keyFindings": [
+    "Top suspect traded 18.5h before +142.5% pump with $580K volume",
+    "Two suspect wallets trace to same funding source",
+    "Primary suspect realized $1.2M profit (+850% return)"
+  ],
+  "shareableLine": "$SHADY: HIGHLY SUSPICIOUS (82/100) — 3 wallets, same funding source, 18h head start",
+  "verdictLabel": "HIGHLY SUSPICIOUS"
+}

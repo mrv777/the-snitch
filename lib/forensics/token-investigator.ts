@@ -14,6 +14,7 @@ import { buildTimeline } from "./timeline-builder";
 import { buildWalletGraph } from "./graph-builder";
 import { recordCredits, canAfford } from "@/lib/budget/tracker";
 import { saveInvestigation } from "@/lib/cache/queries";
+import { generateNarrative } from "./narrative-generator";
 
 // Nansen endpoints
 import { tokenInfo, tokenOhlcv, tokenWhoBoughtSold, tokenFlowIntelligence, tokenDexTrades } from "@/lib/nansen/endpoints/token";
@@ -235,10 +236,8 @@ export async function investigateToken(
       data: { phase: 3, step: "Generating intelligence report...", complete: false },
     });
 
-    phasesCompleted.push(3);
-
-    // Assemble report (narrative is null — Phase 3 of PLAN is separate)
-    const report: ForensicReport = {
+    // Assemble partial report for narrative generation
+    const partialReport: ForensicReport = {
       caseId,
       mode: "token",
       subject: {
@@ -257,7 +256,7 @@ export async function investigateToken(
       timeline,
       graph,
       evidence,
-      narrative: null, // Filled by Phase 3 (AI Narrative) of the PLAN
+      narrative: null,
       metadata: {
         creditsUsed,
         phasesCompleted,
@@ -265,6 +264,27 @@ export async function investigateToken(
         createdAt: Math.floor(Date.now() / 1000),
         earlyExit: false,
         degradedSections,
+      },
+    };
+
+    // Generate AI narrative
+    let narrative = null;
+    try {
+      narrative = await generateNarrative(partialReport);
+    } catch (err) {
+      console.error("Narrative generation failed:", err);
+      degradedSections.push("narrative");
+    }
+
+    phasesCompleted.push(3);
+
+    const report: ForensicReport = {
+      ...partialReport,
+      narrative,
+      metadata: {
+        ...partialReport.metadata,
+        phasesCompleted,
+        duration: Date.now() - startTime,
       },
     };
 
