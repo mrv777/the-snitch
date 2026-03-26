@@ -1,1 +1,134 @@
 @import "tailwindcss";
+
+@theme {
+  --color-bg-primary: #0A0A0A;
+  --color-bg-secondary: #111111;
+  --color-bg-card: #1A1A1A;
+  --color-bg-card-hover: #222222;
+  --color-text-primary: #E0E0E0;
+  --color-text-secondary: #777777;
+  --color-text-dim: #444444;
+  --color-border: #2A2A2A;
+  --color-border-light: #333333;
+
+  /* Verdict / accent colors (from spec section 6) */
+  --color-verdict-red: #FF4444;
+  --color-verdict-orange: #FF8800;
+  --color-verdict-amber: #FFB800;
+  --color-verdict-gray: #888888;
+  --color-verdict-green: #00FF88;
+
+  /* Forensic accents */
+  --color-accent-green: #00FF88;
+  --color-accent-amber: #FFB800;
+  --color-accent-red: #FF4444;
+  --color-accent-blue: #00D4FF;
+  --color-accent-orange: #FF8800;
+
+  /* Node types for wallet graph */
+  --color-node-suspect: #FF4444;
+  --color-node-related: #888888;
+  --color-node-funding: #FFB800;
+  --color-node-exchange: #00D4FF;
+
+  /* Fonts */
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+/* --- Base --- */
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono), ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Noise texture overlay — forensic grain */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+
+/* Selection — green tint for forensic feel */
+::selection {
+  background: #00FF8830;
+  color: #fff;
+}
+
+/* --- Utility classes --- */
+
+.font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/* --- Animations --- */
+
+@keyframes gauge-fill {
+  from { width: 0%; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes timeline-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50% { box-shadow: 0 0 0 4px transparent; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-gauge-fill {
+  animation: gauge-fill 1.2s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-timeline-pulse {
+  animation: timeline-pulse 2s ease-in-out infinite;
+}
+
+/* Staggered fade-in for lists */
+.stagger-fade-in > * {
+  opacity: 0;
+  animation: fade-in 0.4s ease-out forwards;
+}
+.stagger-fade-in > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-fade-in > *:nth-child(2) { animation-delay: 80ms; }
+.stagger-fade-in > *:nth-child(3) { animation-delay: 160ms; }
+.stagger-fade-in > *:nth-child(4) { animation-delay: 240ms; }
+.stagger-fade-in > *:nth-child(5) { animation-delay: 320ms; }
+.stagger-fade-in > *:nth-child(6) { animation-delay: 400ms; }

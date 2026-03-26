@@ -76,6 +76,7 @@ import {
   getInvestigationById,
   getInvestigationBySubject,
   getRecentInvestigations,
+  updateInvestigationCardPaths,
   saveMonitorEvent,
   getRecentMonitorEvents,
   markEventInvestigated,
@@ -137,6 +138,29 @@ describe("investigations", () => {
     const result = getInvestigationBySubject("0xDEF456", "token");
     expect(result).not.toBeNull();
     expect(result!.id).toBe("case-1");
+  });
+
+  it("updates card paths after rendering", () => {
+    saveInvestigation({
+      id: "case-cards",
+      mode: "token",
+      subjectId: "0xCard",
+      reportJson: "{}",
+    });
+
+    const before = getInvestigationById("case-cards");
+    expect(before!.card_path).toBeNull();
+    expect(before!.timeline_card_path).toBeNull();
+
+    updateInvestigationCardPaths(
+      "case-cards",
+      "/public/images/case-cards_forensic.png",
+      "/public/images/case-cards_timeline.png"
+    );
+
+    const after = getInvestigationById("case-cards");
+    expect(after!.card_path).toBe("/public/images/case-cards_forensic.png");
+    expect(after!.timeline_card_path).toBe("/public/images/case-cards_timeline.png");
   });
 
   it("returns recent investigations ordered by time", () => {

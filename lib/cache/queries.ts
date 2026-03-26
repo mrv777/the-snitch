@@ -146,6 +146,19 @@ export function markEventInvestigated(eventId: number): void {
   ).run(eventId);
 }
 
+// --- Card Paths ---
+
+export function updateInvestigationCardPaths(
+  id: string,
+  cardPath: string | null,
+  timelineCardPath: string | null
+): void {
+  const db = getDb();
+  db.prepare(
+    `UPDATE investigations SET card_path = ?, timeline_card_path = ? WHERE id = ?`
+  ).run(cardPath, timelineCardPath, id);
+}
+
 // --- Cleanup ---
 
 export function cleanExpiredCache(): void {
