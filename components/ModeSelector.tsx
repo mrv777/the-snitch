@@ -7,21 +7,20 @@ interface Props {
   onChange: (mode: InvestigationMode) => void;
 }
 
-const MODES: { id: InvestigationMode; label: string; description: string }[] = [
+const MODES: { id: InvestigationMode; label: string; disabled?: boolean }[] = [
   {
     id: "token",
     label: "Token Forensics",
-    description: "Investigate suspicious token price movements",
   },
   {
     id: "prediction",
     label: "Prediction Market",
-    description: "Analyze Polymarket event profiteers",
+    disabled: true,
   },
   {
     id: "monitor",
     label: "Monitor",
-    description: "Autonomous on-chain surveillance",
+    disabled: true,
   },
 ];
 
@@ -31,14 +30,18 @@ export function ModeSelector({ selected, onChange }: Props) {
       {MODES.map((mode) => (
         <button
           key={mode.id}
-          onClick={() => onChange(mode.id)}
+          onClick={() => !mode.disabled && onChange(mode.id)}
+          disabled={mode.disabled}
           className={`flex-1 px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
-            selected === mode.id
-              ? "bg-bg-primary text-accent-green"
-              : "text-text-dim hover:text-text-secondary"
+            mode.disabled
+              ? "text-text-dim/40 cursor-not-allowed"
+              : selected === mode.id
+                ? "bg-bg-primary text-accent-green"
+                : "text-text-dim hover:text-text-secondary"
           }`}
         >
           {mode.label}
+          {mode.disabled && <span className="ml-1 text-[9px] normal-case tracking-normal opacity-60">Soon</span>}
         </button>
       ))}
     </div>
