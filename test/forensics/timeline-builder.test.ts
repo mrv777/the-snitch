@@ -51,15 +51,18 @@ const suspects: Suspect[] = [
 
 function makeDexTrade(overrides: Partial<DexTradeRow> = {}): DexTradeRow {
   return {
-    maker_address: "0xcounterparty0000000000000000000000000000",
-    taker_address: SUSPECT_1,
-    taker_name: "Whale Alpha",
-    token_bought: TOKEN_ADDRESS,
-    token_sold: "0xusdc00000000000000000000000000000000000",
-    amount_usd: 100_000,
+    trader_address: SUSPECT_1,
+    trader_address_label: "Whale Alpha",
+    action: "BUY",
+    token_address: TOKEN_ADDRESS,
+    token_name: "Test Token",
+    token_amount: 100_000,
+    traded_token_address: "0xusdc00000000000000000000000000000000000",
+    traded_token_name: "USDC",
+    traded_token_amount: 100_000,
+    estimated_value_usd: 100_000,
     block_timestamp: "2024-01-15T06:00:00Z", // T-6h
     transaction_hash: "0xtx1",
-    dex_name: "Uniswap",
     ...overrides,
   };
 }
@@ -68,13 +71,15 @@ function makeSmartMoneyTrade(
   overrides: Partial<SmartMoneyDexTradeRow> = {}
 ): SmartMoneyDexTradeRow {
   return {
-    address: "0xsmartmoney000000000000000000000000000000",
-    entity_name: "Smart Money Fund",
-    token_address: TOKEN_ADDRESS,
-    token_symbol: "TOKEN",
-    action: "buy",
-    amount_usd: 250_000,
+    trader_address: "0xsmartmoney000000000000000000000000000000",
+    trader_address_label: "Smart Money Fund",
+    token_bought_address: TOKEN_ADDRESS,
+    token_bought_symbol: "TOKEN",
+    token_sold_address: "0xusdc00000000000000000000000000000000000",
+    token_sold_symbol: "USDC",
+    trade_value_usd: 250_000,
     block_timestamp: "2024-01-15T08:00:00Z", // T-4h
+    chain: "ethereum",
     ...overrides,
   };
 }
@@ -118,9 +123,10 @@ describe("buildTimeline", () => {
   it("includes suspect sell events", () => {
     const dexTrades = [
       makeDexTrade({
-        maker_address: SUSPECT_1,
-        token_bought: "0xusdc00000000000000000000000000000000000",
-        token_sold: TOKEN_ADDRESS,
+        trader_address: SUSPECT_1,
+        action: "SELL",
+        token_address: TOKEN_ADDRESS,
+        traded_token_address: "0xusdc00000000000000000000000000000000000",
         block_timestamp: "2024-01-15T14:00:00Z", // T+2h
       }),
     ];
@@ -160,7 +166,7 @@ describe("buildTimeline", () => {
       dexTrades: [],
       smartMoneyTrades: [
         makeSmartMoneyTrade({
-          token_address: "0xothertoken000000000000000000000000000000",
+          token_bought_address: "0xothertoken000000000000000000000000000000",
         }),
       ],
       tokenAddress: TOKEN_ADDRESS,
@@ -177,7 +183,7 @@ describe("buildTimeline", () => {
       suspects,
       dexTrades: [],
       smartMoneyTrades: [
-        makeSmartMoneyTrade({ address: SUSPECT_1 }),
+        makeSmartMoneyTrade({ trader_address: SUSPECT_1 }),
       ],
       tokenAddress: TOKEN_ADDRESS,
     });
@@ -190,7 +196,7 @@ describe("buildTimeline", () => {
     const dexTrades = [
       makeDexTrade({ block_timestamp: "2024-01-15T06:00:00Z" }), // T-6h
       makeDexTrade({
-        maker_address: SUSPECT_2,
+        trader_address: SUSPECT_2,
         block_timestamp: "2024-01-15T09:00:00Z", // T-3h
         transaction_hash: "0xtx2",
       }),

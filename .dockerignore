@@ -1,0 +1,35 @@
+node_modules
+.next
+.git
+.gitignore
+.env
+.env*.local
+
+# Test files
+test/
+coverage/
+vitest.config.ts
+
+# Data (persisted via volumes, not baked into image)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Generated images (persisted via volumes)
+public/images/*.png
+
+# Editor/IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Documentation (not needed in image)
+PLAN.md
+SPEC.md
+PROMPT.md
+docs/
+
+# Claude workspace
+.claude/

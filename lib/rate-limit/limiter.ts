@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/cache/db";
 
 const DAILY_LIMIT = 5;
+const POLL_DAILY_LIMIT = 10;
 const WINDOW_SECONDS = 86400; // 24 hours
 
 export interface RateLimitResult {
@@ -10,10 +11,9 @@ export interface RateLimitResult {
 }
 
 /**
- * Check if an IP can perform another investigation.
- * 5 investigations/day per IP. Viewing cached reports is unlimited.
+ * Generic rate limit check against a key (ip or prefixed ip).
  */
-export function checkRateLimit(ip: string): RateLimitResult {
+function checkRateLimitForKey(key: string, limit: number): RateLimitResult {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
   const windowStart = now - WINDOW_SECONDS;
@@ -27,18 +27,18 @@ export function checkRateLimit(ip: string): RateLimitResult {
       `SELECT COUNT(*) as count FROM rate_limits
        WHERE ip = ? AND timestamp >= ?`
     )
-    .get(ip, windowStart) as { count: number };
+    .get(key, windowStart) as { count: number };
 
   const count = row.count;
 
-  if (count >= DAILY_LIMIT) {
+  if (count >= limit) {
     // Find oldest entry to compute reset time
     const oldest = db
       .prepare(
         `SELECT MIN(timestamp) as ts FROM rate_limits
          WHERE ip = ? AND timestamp >= ?`
       )
-      .get(ip, windowStart) as { ts: number };
+      .get(key, windowStart) as { ts: number };
 
     return {
       allowed: false,
@@ -49,9 +49,25 @@ export function checkRateLimit(ip: string): RateLimitResult {
 
   return {
     allowed: true,
-    remaining: DAILY_LIMIT - count,
+    remaining: limit - count,
     resetIn: WINDOW_SECONDS,
   };
+}
+
+/**
+ * Check if an IP can perform another investigation.
+ * 5 investigations/day per IP. Viewing cached reports is unlimited.
+ */
+export function checkRateLimit(ip: string): RateLimitResult {
+  return checkRateLimitForKey(ip, DAILY_LIMIT);
+}
+
+/**
+ * Check if an IP can trigger another monitor poll.
+ * 10 polls/day per IP to prevent credit exhaustion.
+ */
+export function checkPollRateLimit(ip: string): RateLimitResult {
+  return checkRateLimitForKey(`poll:${ip}`, POLL_DAILY_LIMIT);
 }
 
 /**
@@ -63,6 +79,18 @@ export function recordInvestigation(ip: string): void {
   const now = Math.floor(Date.now() / 1000);
   db.prepare(`INSERT INTO rate_limits (ip, timestamp) VALUES (?, ?)`).run(
     ip,
+    now
+  );
+}
+
+/**
+ * Record a monitor poll for rate limiting.
+ */
+export function recordPoll(ip: string): void {
+  const db = getDb();
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare(`INSERT INTO rate_limits (ip, timestamp) VALUES (?, ?)`).run(
+    `poll:${ip}`,
     now
   );
 }

@@ -99,14 +99,23 @@ export function profilerRelatedWallets(
 }
 
 // #8 — profiler perp-positions (10 credits on free plan)
-// Skip for tokens with <$10M market cap
-export function profilerPerpPositions(
+// Response has nested { data: { asset_positions: [...] } } — extract the array.
+export async function profilerPerpPositions(
   address: string
 ): Promise<NansenCliResponse<PerpPositionRow[]>> {
-  return nansenCli<PerpPositionRow[]>(
+  const res = await nansenCli<Record<string, unknown>>(
     ["profiler", "perp-positions", "--address", address],
     `profiler-perp-positions:${address}`
   );
+
+  if (!res.success || !res.data) return { ...res, data: [] as PerpPositionRow[] };
+
+  // Unwrap: data may be { data: { asset_positions: [...] } } or { asset_positions: [...] }
+  const inner = (res.data as Record<string, unknown>).data ?? res.data;
+  const obj = inner as Record<string, unknown>;
+  const positions = Array.isArray(obj.asset_positions) ? obj.asset_positions : [];
+
+  return { success: true, data: positions as PerpPositionRow[] };
 }
 
 // #1 — profiler trace (~50 credits/hop on free plan)

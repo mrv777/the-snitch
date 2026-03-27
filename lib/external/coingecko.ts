@@ -79,15 +79,17 @@ export async function searchTokens(
  * Dynamic anomaly threshold based on market cap.
  * Larger tokens need smaller moves to trigger investigation.
  *
- * >$100M market cap: 20% move
- * $1M-$100M: 50% move
- * <$1M: 100% move
+ * >$100M market cap: 15% move
+ * $10M-$100M: 25% move
+ * $1M-$10M: 35% move
+ * <$1M: 50% move
  */
 export function getAnomalyThreshold(marketCapUsd: number | undefined): number {
-  if (!marketCapUsd) return 50; // default mid-cap
-  if (marketCapUsd > 100_000_000) return 20;
-  if (marketCapUsd > 1_000_000) return 50;
-  return 100;
+  if (!marketCapUsd) return 35; // default mid-cap
+  if (marketCapUsd > 100_000_000) return 15;
+  if (marketCapUsd > 10_000_000) return 25;
+  if (marketCapUsd > 1_000_000) return 35;
+  return 50;
 }
 
 /**

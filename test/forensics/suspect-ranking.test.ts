@@ -42,20 +42,24 @@ describe("rankSuspects", () => {
   it("ranks suspects by timing × volume score", () => {
     const dexTrades: DexTradeRow[] = [
       {
-        maker_address: "0xcounterparty0000000000000000000000000000",
-        taker_address: ADDR_A,
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: 100_000,
+        trader_address: ADDR_A,
+        action: "BUY",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 100_000,
+        traded_token_amount: 100_000,
+        estimated_value_usd: 100_000,
         block_timestamp: "2024-01-15T00:00:00Z", // T-12h
         transaction_hash: "0xtx1",
       },
       {
-        maker_address: "0xcounterparty0000000000000000000000000000",
-        taker_address: ADDR_B,
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: 500_000,
+        trader_address: ADDR_B,
+        action: "BUY",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 500_000,
+        traded_token_amount: 500_000,
+        estimated_value_usd: 500_000,
         block_timestamp: "2024-01-15T11:00:00Z", // T-1h
         transaction_hash: "0xtx2",
       },
@@ -73,11 +77,13 @@ describe("rankSuspects", () => {
   it("applies 1.5x multiplier for DEX-visible addresses", () => {
     const dexTrades: DexTradeRow[] = [
       {
-        maker_address: "0xcounterparty",
-        taker_address: ADDR_A,
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: 100_000,
+        trader_address: ADDR_A,
+        action: "BUY",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 100_000,
+        traded_token_amount: 100_000,
+        estimated_value_usd: 100_000,
         block_timestamp: "2024-01-15T06:00:00Z", // T-6h
         transaction_hash: "0xtx1",
       },
@@ -92,20 +98,22 @@ describe("rankSuspects", () => {
     const wbs: WhoBoughtSoldRow[] = [
       {
         address: ADDR_A,
-        entity_name: "Known Whale",
-        action: "buy",
-        amount: 50_000,
-        value_usd: 50_000,
+        address_label: "Known Whale",
+        bought_volume_usd: 50_000,
+        sold_volume_usd: 0,
+        trade_volume_usd: 50_000,
       },
     ];
 
     const dexTrades: DexTradeRow[] = [
       {
-        maker_address: "0xcounterparty",
-        taker_address: ADDR_A, // same address as wbs
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: 100_000,
+        trader_address: ADDR_A, // same address as wbs
+        action: "BUY",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 100_000,
+        traded_token_amount: 100_000,
+        estimated_value_usd: 100_000,
         block_timestamp: "2024-01-15T06:00:00Z",
         transaction_hash: "0xtx1",
       },
@@ -122,11 +130,13 @@ describe("rankSuspects", () => {
   it("limits to top 3 suspects", () => {
     const dexTrades: DexTradeRow[] = [ADDR_A, ADDR_B, ADDR_C, "0xdddd000000000000000000000000000000000004"].map(
       (addr, i) => ({
-        maker_address: "0xcounterparty",
-        taker_address: addr,
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: (4 - i) * 100_000,
+        trader_address: addr,
+        action: "BUY" as const,
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: (4 - i) * 100_000,
+        traded_token_amount: (4 - i) * 100_000,
+        estimated_value_usd: (4 - i) * 100_000,
         block_timestamp: new Date(
           (ANOMALY_TS - (i + 1) * 3600) * 1000
         ).toISOString(),
@@ -141,20 +151,24 @@ describe("rankSuspects", () => {
   it("assigns correct ranks", () => {
     const dexTrades: DexTradeRow[] = [
       {
-        maker_address: "0xcounterparty",
-        taker_address: ADDR_A,
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: 300_000,
+        trader_address: ADDR_A,
+        action: "BUY",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 300_000,
+        traded_token_amount: 300_000,
+        estimated_value_usd: 300_000,
         block_timestamp: "2024-01-15T00:00:00Z",
         transaction_hash: "0xtx1",
       },
       {
-        maker_address: "0xcounterparty",
-        taker_address: ADDR_B,
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: 100_000,
+        trader_address: ADDR_B,
+        action: "BUY",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 100_000,
+        traded_token_amount: 100_000,
+        estimated_value_usd: 100_000,
         block_timestamp: "2024-01-15T06:00:00Z",
         transaction_hash: "0xtx2",
       },
@@ -168,13 +182,15 @@ describe("rankSuspects", () => {
   it("picks up smart money trades for the target token", () => {
     const smTrades: SmartMoneyDexTradeRow[] = [
       {
-        address: ADDR_A,
-        entity_name: "Smart Money Alpha",
-        token_address: TOKEN,
-        token_symbol: "TOKEN",
-        action: "buy",
-        amount_usd: 200_000,
+        trader_address: ADDR_A,
+        trader_address_label: "Smart Money Alpha",
+        token_bought_address: TOKEN,
+        token_bought_symbol: "TOKEN",
+        token_sold_address: "0xusdc",
+        token_sold_symbol: "USDC",
+        trade_value_usd: 200_000,
         block_timestamp: "2024-01-15T06:00:00Z",
+        chain: "ethereum",
       },
     ];
 
@@ -187,12 +203,14 @@ describe("rankSuspects", () => {
   it("ignores smart money trades for other tokens", () => {
     const smTrades: SmartMoneyDexTradeRow[] = [
       {
-        address: ADDR_A,
-        token_address: "0xothertoken",
-        token_symbol: "OTHER",
-        action: "buy",
-        amount_usd: 200_000,
+        trader_address: ADDR_A,
+        token_bought_address: "0xothertoken",
+        token_bought_symbol: "OTHER",
+        token_sold_address: "0xusdc",
+        token_sold_symbol: "USDC",
+        trade_value_usd: 200_000,
         block_timestamp: "2024-01-15T06:00:00Z",
+        chain: "ethereum",
       },
     ];
 
@@ -200,40 +218,45 @@ describe("rankSuspects", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("filters out addresses with zero score (no timing advantage)", () => {
+  it("gives baseline score to addresses with volume but no timing data", () => {
     const wbs: WhoBoughtSoldRow[] = [
       {
         address: ADDR_A,
-        action: "buy",
-        amount: 100,
-        value_usd: 100,
-        // No dex-trades entry → no timing data → timingAdvantage stays 0
+        bought_volume_usd: 100,
+        sold_volume_usd: 0,
+        trade_volume_usd: 100,
+        // No dex-trades entry → no timing data → gets volume-only baseline
       },
     ];
 
     const result = rankSuspects(wbs, [], [], [], anomaly, TOKEN);
     // Address has volume from wbs but no timing data from dex-trades
-    // score = 0 * log10(100) * 1.0 = 0 → filtered out
-    expect(result).toHaveLength(0);
+    // score = log10(100) * 1.0 * 0.5 = 1.0 → included with baseline score
+    expect(result).toHaveLength(1);
+    expect(result[0].score).toBeGreaterThan(0);
   });
 
   it("detects both buy and sell actions", () => {
     const dexTrades: DexTradeRow[] = [
       {
-        maker_address: "0xcounterparty",
-        taker_address: ADDR_A,
-        token_bought: TOKEN,
-        token_sold: "0xusdc",
-        amount_usd: 100_000,
+        trader_address: ADDR_A,
+        action: "BUY",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 100_000,
+        traded_token_amount: 100_000,
+        estimated_value_usd: 100_000,
         block_timestamp: "2024-01-15T06:00:00Z",
         transaction_hash: "0xtx1",
       },
       {
-        maker_address: ADDR_A, // selling
-        taker_address: "0xcounterparty",
-        token_bought: "0xusdc",
-        token_sold: TOKEN,
-        amount_usd: 150_000,
+        trader_address: ADDR_A, // selling
+        action: "SELL",
+        token_address: TOKEN,
+        traded_token_address: "0xusdc",
+        token_amount: 150_000,
+        traded_token_amount: 150_000,
+        estimated_value_usd: 150_000,
         block_timestamp: "2024-01-15T14:00:00Z", // after anomaly
         transaction_hash: "0xtx2",
       },

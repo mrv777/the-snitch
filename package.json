@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:capture-fixtures": "npx tsx scripts/capture-fixtures.ts"
+    "test:capture-fixtures": "npx tsx scripts/capture-fixtures.ts",
+    "seed-demo": "npx tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@google/genai": "^1.45.0",

@@ -10,6 +10,10 @@ const FACTOR_LABELS: Record<EvidenceFactor, string> = {
   wallet_connections: "Wallet Connections",
   smart_money_labels: "Smart Money Labels",
   profit_magnitude: "Profit Magnitude",
+  // PM-specific factors
+  position_timing: "Position Timing",
+  profit_concentration: "Profit Concentration",
+  track_record: "Track Record",
 };
 
 function scoreColor(subScore: number): string {

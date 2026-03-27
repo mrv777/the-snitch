@@ -6,7 +6,7 @@ import type {
   Suspect,
 } from "./types";
 import type {
-  TraceNode,
+  TraceResult,
   CompareResult,
   RelatedWalletRow,
 } from "@/lib/nansen/types";
@@ -14,7 +14,7 @@ import { truncateAddress } from "@/lib/utils/address";
 
 interface GraphInput {
   suspects: Suspect[];
-  traceData?: TraceNode; // trace result for top suspect
+  traceData?: TraceResult; // trace result for top suspect
   relatedWallets: Map<string, RelatedWalletRow[]>; // address → related wallets
   compareResult?: CompareResult;
 }
@@ -39,15 +39,49 @@ export function buildWalletGraph(input: GraphInput): WalletGraph {
     });
   }
 
-  // 2. Walk trace tree (if available)
-  if (traceData) {
-    walkTraceTree(traceData, nodeMap, edges, suspects);
+  // 2. Process trace data (flat nodes + edges format)
+  if (traceData?.nodes && traceData?.edges) {
+    const suspectAddrs = new Set(suspects.map((s) => s.address.toLowerCase()));
+
+    // Add trace nodes
+    for (const nodeAddr of traceData.nodes) {
+      if (!nodeAddr) continue;
+      const addr = nodeAddr.toLowerCase();
+      if (!suspectAddrs.has(addr)) {
+        ensureNode(nodeMap, addr, {
+          label: truncateAddress(nodeAddr),
+          type: "related",
+        });
+      }
+    }
+
+    // Add trace edges
+    for (const edge of traceData.edges) {
+      if (!edge.from || !edge.to) continue;
+      const fromAddr = edge.from.toLowerCase();
+      const toAddr = edge.to.toLowerCase();
+
+      ensureNode(nodeMap, fromAddr, {
+        label: truncateAddress(edge.from),
+        type: "related",
+      });
+      ensureNode(nodeMap, toAddr, {
+        label: truncateAddress(edge.to),
+        type: "related",
+      });
+
+      addEdgeIfNew(edges, fromAddr, toAddr, {
+        type: "transaction",
+        volumeUsd: edge.volume_usd,
+      });
+    }
   }
 
   // 3. Add related wallets
   for (const [ownerAddr, related] of relatedWallets) {
     const ownerLower = ownerAddr.toLowerCase();
     for (const rel of related) {
+      if (!rel.address) continue;
       const relAddr = rel.address.toLowerCase();
       ensureNode(nodeMap, relAddr, {
         label: rel.entity_name || truncateAddress(rel.address),
@@ -63,22 +97,24 @@ export function buildWalletGraph(input: GraphInput): WalletGraph {
   }
 
   // 4. Add compare shared counterparties
-  if (compareResult) {
-    for (const cp of compareResult.shared_counterparties) {
-      const cpAddr = cp.address.toLowerCase();
-      ensureNode(nodeMap, cpAddr, {
-        label: cp.entity_name || truncateAddress(cp.address),
-        type: classifyCounterpartyNode(cp.entity_name),
-        entityName: cp.entity_name,
+  const sharedCps = compareResult?.shared_counterparties;
+  const cmpAddrs = compareResult?.addresses;
+  if (sharedCps && sharedCps.length > 0 && cmpAddrs && cmpAddrs.length >= 2) {
+    const addrA = cmpAddrs[0].toLowerCase();
+    const addrB = cmpAddrs[1].toLowerCase();
+    for (const cpAddr of sharedCps) {
+      if (!cpAddr) continue;
+      const addr = cpAddr.toLowerCase();
+      ensureNode(nodeMap, addr, {
+        label: truncateAddress(cpAddr),
+        type: "related",
       });
 
-      addEdgeIfNew(edges, compareResult.address_a.toLowerCase(), cpAddr, {
+      addEdgeIfNew(edges, addrA, addr, {
         type: "shared_counterparty",
-        volumeUsd: cp.volume_usd_a,
       });
-      addEdgeIfNew(edges, compareResult.address_b.toLowerCase(), cpAddr, {
+      addEdgeIfNew(edges, addrB, addr, {
         type: "shared_counterparty",
-        volumeUsd: cp.volume_usd_b,
       });
     }
   }
@@ -90,57 +126,6 @@ export function buildWalletGraph(input: GraphInput): WalletGraph {
 }
 
 // --- Helpers ---
-
-function walkTraceTree(
-  node: TraceNode,
-  nodeMap: Map<string, GraphNode>,
-  edges: GraphEdge[],
-  suspects: Suspect[]
-): void {
-  const addr = node.address.toLowerCase();
-  const isSuspect = suspects.some(
-    (s) => s.address.toLowerCase() === addr
-  );
-
-  if (!isSuspect) {
-    ensureNode(nodeMap, addr, {
-      label: node.entity_name || node.label || truncateAddress(node.address),
-      type: classifyTraceNode(node),
-      entityName: node.entity_name,
-    });
-  }
-
-  // Add transaction edges
-  if (node.transactions) {
-    for (const tx of node.transactions) {
-      const fromAddr = tx.from.toLowerCase();
-      const toAddr = tx.to.toLowerCase();
-
-      // Ensure both ends exist
-      ensureNode(nodeMap, fromAddr, {
-        label: truncateAddress(tx.from),
-        type: "related",
-      });
-      ensureNode(nodeMap, toAddr, {
-        label: truncateAddress(tx.to),
-        type: "related",
-      });
-
-      addEdgeIfNew(edges, fromAddr, toAddr, {
-        type: "transaction",
-        volumeUsd: tx.value_usd,
-        label: tx.token_symbol,
-      });
-    }
-  }
-
-  // Recurse children
-  if (node.children) {
-    for (const child of node.children) {
-      walkTraceTree(child, nodeMap, edges, suspects);
-    }
-  }
-}
 
 function ensureNode(
   nodeMap: Map<string, GraphNode>,
@@ -168,31 +153,12 @@ function addEdgeIfNew(
   }
 }
 
-function classifyTraceNode(node: TraceNode): GraphNodeType {
-  const name = (node.entity_name || node.label || "").toLowerCase();
-  if (isExchangeLabel(name)) return "exchange";
-  if (node.depth === 0) return "suspect";
-  if (
-    name.includes("fund") ||
-    name.includes("deployer") ||
-    name.includes("creator")
-  )
-    return "funding_source";
-  return "related";
-}
-
 function classifyRelatedNode(rel: RelatedWalletRow): GraphNodeType {
   const name = (rel.entity_name || "").toLowerCase();
   if (isExchangeLabel(name)) return "exchange";
   const relType = (rel.relationship_type || "").toLowerCase();
   if (relType.includes("fund") || relType.includes("source"))
     return "funding_source";
-  return "related";
-}
-
-function classifyCounterpartyNode(entityName?: string): GraphNodeType {
-  if (!entityName) return "related";
-  if (isExchangeLabel(entityName.toLowerCase())) return "exchange";
   return "related";
 }
 

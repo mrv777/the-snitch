@@ -107,6 +107,14 @@ export function InvestigationView({
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // Safety timeout — if the SSE stream stalls (e.g., serverless function killed),
+    // surface an error rather than leaving the user on a spinner forever.
+    const streamTimeout = setTimeout(() => {
+      controller.abort();
+      setError("Investigation timed out. The server may be under heavy load — try again later.");
+      setState("error");
+    }, 90_000);
+
     async function startInvestigation() {
       setState("investigating");
 
@@ -122,6 +130,7 @@ export function InvestigationView({
         // Non-SSE response (cached JSON or error)
         const contentType = res.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {
+          clearTimeout(streamTimeout);
           const data = await res.json();
           if (res.ok) {
             setReport(data);
@@ -163,7 +172,9 @@ export function InvestigationView({
             }
           }
         }
+        clearTimeout(streamTimeout);
       } catch (err) {
+        clearTimeout(streamTimeout);
         if (controller.signal.aborted) return;
         setError(
           err instanceof Error ? err.message : "Investigation failed"
@@ -174,7 +185,10 @@ export function InvestigationView({
 
     startInvestigation();
 
-    return () => controller.abort();
+    return () => {
+      clearTimeout(streamTimeout);
+      controller.abort();
+    };
   }, [tokenAddress, chain, cachedReport, handleSSEEvent]);
 
   return (

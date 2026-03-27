@@ -77,7 +77,12 @@ export type TimelineEventType =
   | "smart_money_activity"
   | "price_move"
   | "flow_reversal"
-  | "large_transfer";
+  | "large_transfer"
+  // PM-specific timeline event types
+  | "position_entry"
+  | "position_exit"
+  | "odds_movement"
+  | "event_resolution";
 
 export interface TimelineEvent {
   timestamp: number; // unix seconds
@@ -122,7 +127,11 @@ export type EvidenceFactor =
   | "volume_concentration"
   | "wallet_connections"
   | "smart_money_labels"
-  | "profit_magnitude";
+  | "profit_magnitude"
+  // PM-specific evidence factors
+  | "position_timing"
+  | "profit_concentration"
+  | "track_record";
 
 export interface EvidenceItem {
   factor: EvidenceFactor;
@@ -158,20 +167,25 @@ export interface ForensicReport {
   caseId: string; // case-YYYYMMDD-XXXX (random 4 hex chars)
   mode: "token" | "prediction";
   subject: {
-    address: string;
-    name: string;
-    symbol: string;
+    address: string; // token address OR market/event ID
+    name: string; // token name OR event title
+    symbol: string; // token symbol OR outcome (e.g., "YES")
     chain: string;
     marketCapUsd?: number;
     priceUsd?: number;
+    // PM-specific subject fields
+    eventTitle?: string; // full Polymarket event title
+    outcome?: string; // resolved outcome (e.g., "YES", "NO")
+    resolutionDate?: string; // ISO date string of resolution
+    marketId?: string; // Polymarket market ID
   };
-  suspicionScore: number; // 0-100
+  suspicionScore: number; // 0-100 (called "Insider Score" in PM mode)
   verdict: Verdict;
-  anomaly: AnomalyWindow | null; // null if CLEAN (no anomaly found)
-  suspects: Suspect[];
+  anomaly: AnomalyWindow | null; // null if CLEAN or PM mode
+  suspects: Suspect[]; // called "profiters" in PM mode UI
   clusters: SuspectCluster[];
   timeline: TimelineEvent[];
-  graph: WalletGraph;
+  graph: WalletGraph; // empty for PM mode (no trace)
   evidence: EvidenceItem[];
   narrative: AINarrative | null; // null until Phase 3 completes
   metadata: {
@@ -206,5 +220,13 @@ export interface TokenInvestigationOptions {
   tokenAddress: string;
   chain: string;
   skipCoinGeckoPrefilter?: boolean;
+  onProgress?: (event: SSEEvent) => void;
+}
+
+// --- Prediction Market Investigation Options ---
+
+export interface PredictionInvestigationOptions {
+  eventId: string; // Polymarket event ID
+  marketId?: string; // specific market within event (optional)
   onProgress?: (event: SSEEvent) => void;
 }

@@ -30,7 +30,7 @@ import type {
   DexTradeRow,
   SmartMoneyDexTradeRow,
   SmartMoneyNetflowRow,
-  TraceNode,
+  TraceResult,
   RelatedWalletRow,
   PnlSummaryResponse,
   PerpPositionRow,
@@ -322,8 +322,8 @@ async function runPhase0(
 
   return {
     tokenInfo: infoRes.success ? infoRes.data : null,
-    ohlcv: ohlcvRes.success ? ohlcvRes.data : [],
-    whoBoughtSold: wbsRes.success ? wbsRes.data : [],
+    ohlcv: ohlcvRes.success && Array.isArray(ohlcvRes.data) ? ohlcvRes.data : [],
+    whoBoughtSold: wbsRes.success && Array.isArray(wbsRes.data) ? wbsRes.data : [],
   };
 }
 
@@ -345,16 +345,27 @@ async function runPhase1(
     smartMoneyNetflow(chain),
   ]);
 
+  // Flow intelligence returns a single aggregate row, not an array.
+  // Normalize to array for consistent downstream handling.
+  let flowData: FlowIntelligenceRow[] = [];
+  if (flowRes.success && flowRes.data) {
+    if (Array.isArray(flowRes.data)) {
+      flowData = flowRes.data;
+    } else {
+      flowData = [flowRes.data as FlowIntelligenceRow];
+    }
+  }
+
   return {
-    flowIntelligence: flowRes.success ? flowRes.data : [],
-    dexTrades: dexRes.success ? dexRes.data : [],
-    smartMoneyDexTrades: smDexRes.success ? smDexRes.data : [],
-    smartMoneyNetflow: smNetRes.success ? smNetRes.data : [],
+    flowIntelligence: flowData,
+    dexTrades: dexRes.success && Array.isArray(dexRes.data) ? dexRes.data : [],
+    smartMoneyDexTrades: smDexRes.success && Array.isArray(smDexRes.data) ? smDexRes.data : [],
+    smartMoneyNetflow: smNetRes.success && Array.isArray(smNetRes.data) ? smNetRes.data : [],
   };
 }
 
 interface Phase2Result {
-  traceData: TraceNode | undefined;
+  traceData: TraceResult | undefined;
   relatedWallets: Map<string, RelatedWalletRow[]>;
   pnlSummaries: Map<string, PnlSummaryResponse>;
   perpPositions: PerpPositionRow[] | undefined;
@@ -369,7 +380,7 @@ async function runPhase2(
   degradedSections: string[]
 ): Promise<Phase2Result> {
   let creditsUsed = 0;
-  let traceData: TraceNode | undefined;
+  let traceData: TraceResult | undefined;
   const relatedWallets = new Map<string, RelatedWalletRow[]>();
   const pnlSummaries = new Map<string, PnlSummaryResponse>();
   let perpPositions: PerpPositionRow[] | undefined;
@@ -403,7 +414,7 @@ async function runPhase2(
   calls.push(
     retryOnce(() => profilerRelatedWallets(topSuspect.address, chain)).then(
       (res) => {
-        if (res.success) {
+        if (res.success && Array.isArray(res.data)) {
           relatedWallets.set(topSuspect.address.toLowerCase(), res.data);
         }
         creditsUsed += 10;
@@ -430,7 +441,7 @@ async function runPhase2(
     calls.push(
       retryOnce(() => profilerPerpPositions(topSuspect.address)).then(
         (res) => {
-          if (res.success) {
+          if (res.success && Array.isArray(res.data)) {
             perpPositions = res.data;
           }
           creditsUsed += 10;
@@ -458,7 +469,7 @@ async function runPhase2(
     calls.push(
       retryOnce(() => profilerRelatedWallets(suspect.address, chain)).then(
         (res) => {
-          if (res.success) {
+          if (res.success && Array.isArray(res.data)) {
             relatedWallets.set(suspect.address.toLowerCase(), res.data);
           }
           creditsUsed += 10;
@@ -487,21 +498,21 @@ export function detectAnomaly(
   let bestAbsChange = 0;
 
   for (const candle of ohlcv) {
-    if (candle.open === 0) continue;
+    if (!candle.open || !candle.close) continue; // skip null/zero prices
     const changePct = ((candle.close - candle.open) / candle.open) * 100;
     const absChange = Math.abs(changePct);
 
     if (absChange >= threshold && absChange > bestAbsChange) {
       bestAbsChange = absChange;
       bestAnomaly = {
-        date: candle.timestamp,
-        timestamp: Math.floor(Date.parse(candle.timestamp) / 1000),
+        date: candle.interval_start,
+        timestamp: Math.floor(Date.parse(candle.interval_start) / 1000),
         priceChangePct: changePct,
         direction: changePct > 0 ? "pump" : "dump",
-        openPrice: candle.open,
-        closePrice: candle.close,
-        highPrice: candle.high,
-        lowPrice: candle.low,
+        openPrice: candle.open!,
+        closePrice: candle.close!,
+        highPrice: candle.high ?? candle.close!,
+        lowPrice: candle.low ?? candle.open!,
         volume: candle.volume,
       };
     }
@@ -555,21 +566,31 @@ export function rankSuspects(
   // 1. Merge from who-bought-sold
   for (const row of whoBoughtSold) {
     const entry = getEntry(row.address);
-    entry.volumeUsd += row.value_usd;
-    entry.action = row.action;
-    entry.entityName = entry.entityName || row.entity_name;
-    entry.label = entry.label || row.label;
+    const volumeUsd = row.trade_volume_usd ?? (row.bought_volume_usd ?? 0) + (row.sold_volume_usd ?? 0);
+    entry.volumeUsd += volumeUsd;
+    // Derive action from bought vs sold volume
+    const bought = row.bought_volume_usd ?? 0;
+    const sold = row.sold_volume_usd ?? 0;
+    if (bought > 0 && sold > 0) {
+      entry.action = "both";
+    } else if (sold > bought) {
+      entry.action = "sell";
+    } else {
+      entry.action = "buy";
+    }
+    entry.entityName = entry.entityName || row.address_label;
     entry.sources.add("who-bought-sold");
   }
 
   // 2. Merge from dex-trades (provides DEX visibility + intraday timing)
   for (const trade of dexTrades) {
-    const isBuy = trade.token_bought.toLowerCase() === tokenLower;
-    const addr = isBuy ? trade.taker_address : trade.maker_address;
-    const name = isBuy ? trade.taker_name : trade.maker_name;
+    const isBuy = trade.action?.toUpperCase() === "BUY";
+    const addr = trade.trader_address;
+    if (!addr) continue;
+    const name = trade.trader_address_label;
 
     const entry = getEntry(addr);
-    entry.volumeUsd += trade.amount_usd;
+    entry.volumeUsd += trade.estimated_value_usd || 0;
     entry.isDexVisible = true;
     entry.entityName = entry.entityName || name;
     entry.sources.add("dex-trades");
@@ -589,16 +610,17 @@ export function rankSuspects(
     }
   }
 
-  // 3. Merge from flow-intelligence (entity-level, may not have addresses)
-  // Flow intelligence provides entity types rather than specific addresses,
-  // so we use it to enrich existing entries
-  for (const flow of flowIntelligence) {
-    if (flow.entity_name) {
-      // Try to find matching address from other sources
+  // 3. Merge from flow-intelligence (aggregate shape — single row with net flows per entity type)
+  // Flow intelligence returns aggregate net flow data per entity type, not per address.
+  // We use it as a signal enrichment: if smart_trader or whale net flows are significant,
+  // boost existing entries that came from smart-money sources.
+  if (flowIntelligence.length > 0) {
+    const flow = flowIntelligence[0];
+    const hasSmartTraderFlow = (flow.smart_trader_net_flow_usd ?? 0) !== 0;
+    const hasWhaleFlow = (flow.whale_net_flow_usd ?? 0) !== 0;
+    if (hasSmartTraderFlow || hasWhaleFlow) {
       for (const entry of scoreMap.values()) {
-        if (
-          entry.entityName?.toLowerCase() === flow.entity_name.toLowerCase()
-        ) {
+        if (entry.sources.has("smart-money") || entry.sources.has("dex-trades")) {
           entry.sources.add("flow-intelligence");
         }
       }
@@ -607,12 +629,14 @@ export function rankSuspects(
 
   // 4. Check smart money trades for the same token
   for (const trade of smartMoneyTrades) {
-    if (trade.token_address.toLowerCase() !== tokenLower) continue;
+    const boughtAddr = trade.token_bought_address?.toLowerCase() ?? "";
+    const soldAddr = trade.token_sold_address?.toLowerCase() ?? "";
+    if (boughtAddr !== tokenLower && soldAddr !== tokenLower) continue;
 
-    const entry = getEntry(trade.address);
-    entry.volumeUsd += trade.amount_usd;
+    const entry = getEntry(trade.trader_address);
+    entry.volumeUsd += trade.trade_value_usd ?? 0;
     entry.isDexVisible = true;
-    entry.entityName = entry.entityName || trade.entity_name;
+    entry.entityName = entry.entityName || trade.trader_address_label;
     entry.sources.add("smart-money");
 
     const tradeTs = Date.parse(trade.block_timestamp) / 1000;
@@ -622,12 +646,21 @@ export function rankSuspects(
     }
   }
 
-  // 5. Compute composite score: timingAdvantage × volume, DEX-visible 1.5x
+  // 5. Compute composite score
+  // Timing × volume when timing is available; volume-only baseline otherwise
   for (const entry of scoreMap.values()) {
     const timingFactor = Math.min(entry.timingAdvantage, 72); // cap at 72h
     const volumeFactor = Math.log10(Math.max(entry.volumeUsd, 1));
     const dexMultiplier = entry.isDexVisible ? 1.5 : 1.0;
-    entry.score = timingFactor * volumeFactor * dexMultiplier;
+
+    if (timingFactor > 0) {
+      // Has timing data: timing × volume
+      entry.score = timingFactor * volumeFactor * dexMultiplier;
+    } else if (entry.volumeUsd > 0) {
+      // No timing data but has volume: use volume as baseline score
+      // This ensures who-bought-sold entries still get ranked
+      entry.score = volumeFactor * dexMultiplier * 0.5; // 0.5 penalty for no timing
+    }
   }
 
   // 6. Sort by score descending, take top 3
@@ -664,7 +697,7 @@ function enrichSuspects(suspects: Suspect[], phase2: Phase2Result): void {
     }
 
     // Perp positions (only for top suspect)
-    if (suspect.rank === 1 && phase2.perpPositions) {
+    if (suspect.rank === 1 && Array.isArray(phase2.perpPositions)) {
       suspect.perpPositions = phase2.perpPositions.map((p) => ({
         market: p.market,
         side: p.side,
@@ -681,7 +714,7 @@ function buildClusters(
   suspects: Suspect[],
   compareResult: CompareResult | undefined,
   relatedWallets: Map<string, RelatedWalletRow[]>,
-  traceData: TraceNode | undefined
+  traceData: TraceResult | undefined
 ): SuspectCluster[] {
   const clusters: SuspectCluster[] = [];
   if (suspects.length < 2) return clusters;
@@ -689,18 +722,19 @@ function buildClusters(
   const suspectAddrs = new Set(suspects.map((s) => s.address.toLowerCase()));
 
   // Check compare result for shared counterparties
-  if (compareResult && compareResult.shared_counterparties.length > 0) {
-    const a = suspects.find(
-      (s) => s.address.toLowerCase() === compareResult.address_a.toLowerCase()
-    );
-    const b = suspects.find(
-      (s) => s.address.toLowerCase() === compareResult.address_b.toLowerCase()
-    );
+  const sharedCps = compareResult?.shared_counterparties;
+  const cmpAddrs = compareResult?.addresses;
+  if (sharedCps && sharedCps.length > 0 && cmpAddrs && cmpAddrs.length >= 2) {
+    const addrA = cmpAddrs[0].toLowerCase();
+    const addrB = cmpAddrs[1].toLowerCase();
+    const a = suspects.find((s) => s.address.toLowerCase() === addrA);
+    const b = suspects.find((s) => s.address.toLowerCase() === addrB);
     if (a && b) {
+      const count = sharedCps.length;
       clusters.push({
         suspects: [a, b],
         connectionType: "shared_counterparties",
-        description: `${a.entityName || a.address.slice(0, 10)} and ${b.entityName || b.address.slice(0, 10)} share ${compareResult.shared_counterparties.length} counterpart${compareResult.shared_counterparties.length > 1 ? "ies" : "y"}`,
+        description: `${a.entityName || a.address.slice(0, 10)} and ${b.entityName || b.address.slice(0, 10)} share ${count} counterpart${count > 1 ? "ies" : "y"}`,
       });
     }
   }
@@ -734,7 +768,7 @@ function buildClusters(
   }
 
   // Check trace data for same funding source
-  if (traceData && traceData.children) {
+  if (traceData && traceData.edges && traceData.edges.length > 0) {
     const fundingSources = new Set<string>();
     collectFundingSources(traceData, fundingSources);
 
@@ -782,15 +816,10 @@ function buildClusters(
   return clusters;
 }
 
-function collectFundingSources(node: TraceNode, sources: Set<string>): void {
-  if (node.transactions) {
-    for (const tx of node.transactions) {
-      sources.add(tx.from.toLowerCase());
-    }
-  }
-  if (node.children) {
-    for (const child of node.children) {
-      collectFundingSources(child, sources);
+function collectFundingSources(trace: TraceResult, sources: Set<string>): void {
+  if (trace.edges) {
+    for (const edge of trace.edges) {
+      if (edge.from) sources.add(edge.from.toLowerCase());
     }
   }
 }
@@ -807,14 +836,14 @@ export function computePreMoveVolume(
 
   for (const trade of dexTrades) {
     const isRelated =
-      trade.token_bought.toLowerCase() === tokenLower ||
-      trade.token_sold.toLowerCase() === tokenLower;
+      (trade.token_address?.toLowerCase() ?? "") === tokenLower ||
+      (trade.traded_token_address?.toLowerCase() ?? "") === tokenLower;
     if (!isRelated) continue;
 
     const tradeTs = Date.parse(trade.block_timestamp) / 1000;
     // Count volume in the 72h before anomaly
     if (tradeTs < anomaly.timestamp && anomaly.timestamp - tradeTs <= 72 * 3600) {
-      total += trade.amount_usd;
+      total += trade.estimated_value_usd ?? 0;
     }
   }
 

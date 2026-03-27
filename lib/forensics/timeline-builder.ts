@@ -26,23 +26,25 @@ export function buildTimeline(input: TimelineInput): TimelineEvent[] {
   const suspectAddresses = new Set(suspects.map((s) => s.address.toLowerCase()));
   const tokenLower = tokenAddress.toLowerCase();
 
+  // Relevant window: 72h before anomaly to 24h after
+  const windowStart = anomaly.timestamp - 72 * 3600;
+  const windowEnd = anomaly.timestamp + 24 * 3600;
+
   // 1. Suspect trades from dex-trades (most precise timestamps)
   for (const trade of dexTrades) {
     const ts = toUnix(trade.block_timestamp);
-    if (ts === 0) continue;
+    if (ts === 0 || ts < windowStart || ts > windowEnd) continue;
 
-    const isMakerSuspect = suspectAddresses.has(trade.maker_address.toLowerCase());
-    const isTakerSuspect = suspectAddresses.has(trade.taker_address.toLowerCase());
+    const traderAddr = trade.trader_address ?? "";
+    const isSuspect = suspectAddresses.has(traderAddr.toLowerCase());
 
-    if (!isMakerSuspect && !isTakerSuspect) continue;
+    if (!isSuspect) continue;
 
-    const suspectAddr = isMakerSuspect ? trade.maker_address : trade.taker_address;
     const suspectName =
-      (isMakerSuspect ? trade.maker_name : trade.taker_name) ||
-      truncateAddress(suspectAddr);
+      trade.trader_address_label || truncateAddress(traderAddr);
 
-    // Determine if buy or sell of the target token
-    const isBuy = trade.token_bought.toLowerCase() === tokenLower;
+    // Determine if buy or sell of the target token based on action field
+    const isBuy = trade.action?.toUpperCase() === "BUY";
     const type: TimelineEventType = isBuy ? "suspect_buy" : "suspect_sell";
 
     events.push({
@@ -50,29 +52,33 @@ export function buildTimeline(input: TimelineInput): TimelineEvent[] {
       relativeLabel: formatRelativeTime(ts, anomaly.timestamp),
       type,
       actor: suspectName,
-      description: `${suspectName} ${isBuy ? "bought" : "sold"} ${formatUsdShort(trade.amount_usd)} on ${trade.dex_name || "DEX"}`,
-      volumeUsd: trade.amount_usd,
+      description: `${suspectName} ${isBuy ? "bought" : "sold"} ${formatUsdShort(trade.estimated_value_usd ?? 0)} on DEX`,
+      volumeUsd: trade.estimated_value_usd ?? 0,
       transactionHash: trade.transaction_hash,
     });
   }
 
   // 2. Smart money activity related to the token
   for (const trade of smartMoneyTrades) {
-    if (trade.token_address.toLowerCase() !== tokenLower) continue;
+    const boughtAddr = trade.token_bought_address?.toLowerCase() ?? "";
+    const soldAddr = trade.token_sold_address?.toLowerCase() ?? "";
+    if (boughtAddr !== tokenLower && soldAddr !== tokenLower) continue;
     // Skip if this is already a suspect (avoid duplication)
-    if (suspectAddresses.has(trade.address.toLowerCase())) continue;
+    if (suspectAddresses.has(trade.trader_address.toLowerCase())) continue;
 
     const ts = toUnix(trade.block_timestamp);
-    if (ts === 0) continue;
+    if (ts === 0 || ts < windowStart || ts > windowEnd) continue;
 
-    const name = trade.entity_name || truncateAddress(trade.address);
+    const name = trade.trader_address_label || truncateAddress(trade.trader_address);
+    // Derive action from whether the target token was bought or sold
+    const isBuy = boughtAddr === tokenLower;
     events.push({
       timestamp: ts,
       relativeLabel: formatRelativeTime(ts, anomaly.timestamp),
       type: "smart_money_activity",
       actor: name,
-      description: `Smart money (${name}) ${trade.action === "buy" ? "bought" : "sold"} ${formatUsdShort(trade.amount_usd)}`,
-      volumeUsd: trade.amount_usd,
+      description: `Smart money (${name}) ${isBuy ? "bought" : "sold"} ${formatUsdShort(trade.trade_value_usd ?? 0)}`,
+      volumeUsd: trade.trade_value_usd ?? 0,
       transactionHash: trade.transaction_hash,
     });
   }

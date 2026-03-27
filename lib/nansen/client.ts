@@ -133,8 +133,11 @@ export async function nansenApi<T = unknown>(
         };
       }
 
-      const data = (await res.json()) as T;
-      const result: NansenCliResponse<T> = { success: true, data };
+      const raw = await res.json();
+
+      // REST responses may have the same nested { data: [...] } wrapper
+      // as CLI responses. Unwrap if present so callers get the array directly.
+      const result = unwrapRestResponse<T>(raw);
 
       if (cacheKey) {
         setCachedApiResponse(cacheKey, result);
@@ -160,6 +163,33 @@ export async function nansenApi<T = unknown>(
     error: "Max retries exceeded",
     code: "MAX_RETRIES",
   };
+}
+
+/**
+ * REST API responses often wrap arrays in an object:
+ *   { chain: "...", token_address: "...", data: [...] }
+ * Unwrap the nested `data` array when the top-level response is an object (not an array).
+ */
+function unwrapRestResponse<T>(raw: unknown): NansenCliResponse<T> {
+  // If the response is already an array, use it directly
+  if (Array.isArray(raw)) {
+    return { success: true, data: raw as T };
+  }
+
+  // If it's an object with a nested `data` array, unwrap it
+  if (raw && typeof raw === "object" && "data" in raw) {
+    const obj = raw as Record<string, unknown>;
+    if (Array.isArray(obj.data)) {
+      return {
+        success: true,
+        data: obj.data as T,
+        pagination: obj.pagination as NansenCliResponse<T>["pagination"],
+      };
+    }
+  }
+
+  // Otherwise return as-is (single-object responses like pnl-summary)
+  return { success: true, data: raw as T };
 }
 
 /**

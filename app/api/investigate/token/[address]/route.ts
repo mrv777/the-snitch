@@ -29,7 +29,7 @@ export async function POST(
   }
 
   // Check for cached investigation (return immediately if fresh)
-  const cached = getInvestigationBySubject(tokenAddress, "token");
+  const cached = getInvestigationBySubject(tokenAddress, "token", chain);
   if (cached) {
     const age = Math.floor(Date.now() / 1000) - cached.created_at;
     if (age < 86400) {
@@ -65,9 +65,6 @@ export async function POST(
     );
   }
 
-  // Record the investigation for rate limiting
-  recordInvestigation(ip);
-
   // SSE stream
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -76,6 +73,9 @@ export async function POST(
         const data = `data: ${JSON.stringify(event)}\n\n`;
         controller.enqueue(encoder.encode(data));
       }
+
+      // Record rate limit once the investigation actually starts
+      recordInvestigation(ip);
 
       try {
         const report = await investigateToken({
@@ -89,6 +89,8 @@ export async function POST(
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Investigation failed";
+        const stack = err instanceof Error ? err.stack : undefined;
+        if (stack) console.error("Investigation error:", stack);
         send({ type: "error", data: { message } });
       } finally {
         controller.close();
@@ -107,13 +109,14 @@ export async function POST(
 
 // GET handler returns cached report if available
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
   const tokenAddress = decodeURIComponent(address).trim();
+  const chain = request.nextUrl.searchParams.get("chain") || undefined;
 
-  const cached = getInvestigationBySubject(tokenAddress, "token");
+  const cached = getInvestigationBySubject(tokenAddress, "token", chain);
   if (cached) {
     const report: ForensicReport = JSON.parse(cached.report_json);
     return new Response(JSON.stringify(report), {

@@ -61,7 +61,7 @@ export function saveInvestigation(investigation: {
   ).run(
     investigation.id,
     investigation.mode,
-    investigation.subjectId.toLowerCase(),
+    (investigation.subjectId ?? investigation.id).toLowerCase(),
     investigation.chain ?? null,
     investigation.suspicionScore ?? null,
     investigation.verdict ?? null,
@@ -81,9 +81,21 @@ export function getInvestigationById(id: string): SavedInvestigation | null {
 
 export function getInvestigationBySubject(
   subjectId: string,
-  mode: string
+  mode: string,
+  chain?: string
 ): SavedInvestigation | null {
   const db = getDb();
+  if (chain) {
+    const row = db
+      .prepare(
+        `SELECT * FROM investigations
+         WHERE subject_id = ? AND mode = ? AND chain = ?
+         ORDER BY created_at DESC LIMIT 1`
+      )
+      .get(subjectId.toLowerCase(), mode, chain) as SavedInvestigation | undefined;
+    if (row) return row;
+  }
+  // Fallback: match without chain (for prediction mode or backward compat)
   const row = db
     .prepare(
       `SELECT * FROM investigations

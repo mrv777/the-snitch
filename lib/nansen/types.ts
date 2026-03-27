@@ -78,40 +78,34 @@ export interface PerpPositionRow {
   leverage?: number;
 }
 
-// Profiler trace returns a tree of hops
-export interface TraceNode {
-  address: string;
-  entity_name?: string;
-  label?: string;
+// Profiler trace returns a flat graph
+export interface TraceResult {
+  root: string;
+  chain: string;
   depth: number;
-  children?: TraceNode[];
-  transactions?: TraceTransaction[];
+  nodes: string[]; // addresses
+  edges: TraceEdge[];
+  stats?: Record<string, unknown>;
 }
 
-export interface TraceTransaction {
+export interface TraceEdge {
   from: string;
   to: string;
-  value_usd: number;
-  token_symbol?: string;
-  block_timestamp: string;
-  transaction_hash: string;
+  volume_usd: number;
+  tx_count?: number;
+  hop?: number;
 }
+
+/** @deprecated Use TraceResult instead */
+export type TraceNode = TraceResult;
 
 // Profiler compare returns shared counterparties
 export interface CompareResult {
-  address_a: string;
-  address_b: string;
-  shared_counterparties: SharedCounterparty[];
-  common_tokens?: string[];
-}
-
-export interface SharedCounterparty {
-  address: string;
-  entity_name?: string;
-  interaction_count_a: number;
-  interaction_count_b: number;
-  volume_usd_a: number;
-  volume_usd_b: number;
+  addresses: string[];
+  chain: string;
+  shared_counterparties: string[]; // array of addresses
+  shared_tokens?: string[];
+  balances?: { address: string; total_usd: number }[];
 }
 
 // Profiler batch response
@@ -136,66 +130,100 @@ export interface TokenInfoResponse {
 }
 
 export interface TokenOhlcvRow {
-  timestamp: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
+  interval_start: string;
+  /** @deprecated alias — use interval_start */
+  timestamp?: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
   volume: number;
+  volume_usd?: number | null;
 }
 
 export interface WhoBoughtSoldRow {
   address: string;
-  entity_name?: string;
-  label?: string;
-  action: "buy" | "sell";
-  amount: number;
-  value_usd: number;
+  address_label?: string;
+  bought_token_volume?: number;
+  sold_token_volume?: number;
+  token_trade_volume?: number;
+  bought_volume_usd?: number;
+  sold_volume_usd?: number;
+  trade_volume_usd?: number;
 }
 
 export interface FlowIntelligenceRow {
-  entity_type: string;
-  entity_name?: string;
-  direction: "inflow" | "outflow";
-  volume_usd: number;
-  transaction_count: number;
-  date?: string;
+  public_figure_net_flow_usd?: number;
+  public_figure_avg_flow_usd?: number;
+  public_figure_wallet_count?: number;
+  top_pnl_net_flow_usd?: number;
+  top_pnl_avg_flow_usd?: number;
+  top_pnl_wallet_count?: number;
+  whale_net_flow_usd?: number;
+  whale_avg_flow_usd?: number;
+  whale_wallet_count?: number;
+  smart_trader_net_flow_usd?: number;
+  smart_trader_avg_flow_usd?: number;
+  smart_trader_wallet_count?: number;
+  exchange_net_flow_usd?: number;
+  exchange_avg_flow_usd?: number;
+  exchange_wallet_count?: number;
+  fresh_wallets_net_flow_usd?: number;
+  fresh_wallets_avg_flow_usd?: number;
+  fresh_wallets_wallet_count?: number;
 }
 
 export interface DexTradeRow {
-  maker_address: string;
-  maker_name?: string;
-  taker_address: string;
-  taker_name?: string;
-  token_bought: string;
-  token_sold: string;
-  amount_usd: number;
   block_timestamp: string;
   transaction_hash: string;
-  dex_name?: string;
+  trader_address: string;
+  trader_address_label?: string;
+  action: string; // "BUY" | "SELL"
+  token_address: string;
+  token_name?: string;
+  token_amount: number;
+  traded_token_address: string;
+  traded_token_name?: string;
+  traded_token_amount: number;
+  estimated_swap_price_usd?: number;
+  estimated_value_usd: number;
 }
 
 // --- Smart Money Domain ---
 
 export interface SmartMoneyDexTradeRow {
-  address: string;
-  entity_name?: string;
-  token_address: string;
-  token_symbol: string;
-  action: "buy" | "sell";
-  amount_usd: number;
+  chain?: string;
   block_timestamp: string;
   transaction_hash?: string;
+  trader_address: string;
+  trader_address_label?: string;
+  token_bought_address?: string;
+  token_sold_address?: string;
+  token_bought_symbol?: string;
+  token_sold_symbol?: string;
+  token_bought_amount?: number;
+  token_sold_amount?: number;
+  token_bought_age_days?: number;
+  token_sold_age_days?: number;
+  token_bought_market_cap?: number;
+  token_sold_market_cap?: number;
+  token_bought_fdv?: number;
+  token_sold_fdv?: number;
+  trade_value_usd?: number;
 }
 
 export interface SmartMoneyNetflowRow {
   token_address: string;
   token_symbol: string;
   chain: string;
-  inflow_usd: number;
-  outflow_usd: number;
-  netflow_usd: number;
-  smart_money_count?: number;
+  net_flow_1h_usd?: number;
+  net_flow_24h_usd?: number;
+  net_flow_7d_usd?: number;
+  net_flow_30d_usd?: number;
+  token_sectors?: string;
+  trader_count?: number;
+  token_age_days?: number;
+  market_cap_usd?: number;
 }
 
 // --- Prediction Market Domain ---

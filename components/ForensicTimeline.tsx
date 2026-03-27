@@ -15,6 +15,11 @@ const EVENT_COLORS: Record<TimelineEventType, string> = {
   price_move: "#00FF88",
   flow_reversal: "#FFB800",
   large_transfer: "#888888",
+  // PM-specific event types
+  position_entry: "#FF4444",
+  position_exit: "#FF8800",
+  odds_movement: "#FFB800",
+  event_resolution: "#00FF88",
 };
 
 const EVENT_ICONS: Record<TimelineEventType, string> = {
@@ -24,6 +29,11 @@ const EVENT_ICONS: Record<TimelineEventType, string> = {
   price_move: "PRICE",
   flow_reversal: "FLOW",
   large_transfer: "TX",
+  // PM-specific event types
+  position_entry: "ENTRY",
+  position_exit: "EXIT",
+  odds_movement: "ODDS",
+  event_resolution: "RESOLVED",
 };
 
 export function ForensicTimeline({ events }: Props) {
@@ -42,7 +52,7 @@ export function ForensicTimeline({ events }: Props) {
         <div className="space-y-0 stagger-fade-in">
           {events.map((event, i) => {
             const color = EVENT_COLORS[event.type];
-            const isPriceMove = event.type === "price_move";
+            const isPriceMove = event.type === "price_move" || event.type === "event_resolution";
 
             return (
               <div

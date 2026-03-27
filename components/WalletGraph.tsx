@@ -78,9 +78,14 @@ export function WalletGraphViz({ graph }: Props) {
     const { width, height } = canvas;
     const { x: tx, y: ty, k } = transformRef.current;
 
+    const dpr = window.devicePixelRatio || 1;
     ctx.clearRect(0, 0, width, height);
     ctx.save();
-    ctx.translate(tx + width / 2, ty + height / 2);
+    // Scale for DPR first, then work in CSS pixel coordinates
+    ctx.scale(dpr, dpr);
+    const cssW = width / dpr;
+    const cssH = height / dpr;
+    ctx.translate(tx + cssW / 2, ty + cssH / 2);
     ctx.scale(k, k);
 
     // Draw edges
@@ -179,7 +184,37 @@ export function WalletGraphViz({ graph }: Props) {
         "collide",
         forceCollide<SimNode>().radius((d) => NODE_RADIUS[d.type] + 10)
       )
-      .on("tick", draw);
+      .on("tick", draw)
+      .on("end", () => {
+        // Auto-fit viewport to show all nodes after simulation settles
+        const canvas = canvasRef.current;
+        if (!canvas || nodes.length === 0) return;
+
+        const validNodes = nodes.filter((n) => n.x != null && n.y != null);
+        if (validNodes.length === 0) return;
+
+        const xs = validNodes.map((n) => n.x!);
+        const ys = validNodes.map((n) => n.y!);
+        const minX = Math.min(...xs) - 40;
+        const maxX = Math.max(...xs) + 40;
+        const minY = Math.min(...ys) - 40;
+        const maxY = Math.max(...ys) + 40;
+
+        const graphW = maxX - minX;
+        const graphH = maxY - minY;
+        const canvasW = canvas.width / (window.devicePixelRatio || 1);
+        const canvasH = canvas.height / (window.devicePixelRatio || 1);
+
+        // Scale to fit, cap at 1.5x to avoid over-zoom on small graphs
+        const scale = Math.min(canvasW / graphW, canvasH / graphH, 1.5);
+        // The draw function already translates by (width/2, height/2) before applying transform,
+        // so tx/ty just need to center the graph's center point at the origin
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+
+        transformRef.current = { x: -cx * scale, y: -cy * scale, k: scale };
+        draw();
+      });
 
     return () => {
       simulation.stop();
@@ -198,8 +233,6 @@ export function WalletGraphViz({ graph }: Props) {
       canvas.height = height * dpr;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
-      const ctx = canvas.getContext("2d");
-      if (ctx) ctx.scale(dpr, dpr);
       draw();
     }
     resize();
@@ -332,7 +365,7 @@ export function WalletGraphViz({ graph }: Props) {
 
       <div
         ref={containerRef}
-        className="relative h-80 border border-border bg-bg-secondary overflow-hidden cursor-grab active:cursor-grabbing"
+        className="relative h-[500px] border border-border bg-bg-secondary overflow-hidden cursor-grab active:cursor-grabbing"
       >
         <canvas
           ref={canvasRef}

@@ -146,6 +146,18 @@ const FIXTURES: FixtureSpec[] = [
     estimatedCredits: 50,
   },
 
+  // Smart Money — Base chain (for monitor watcher which polls both chains)
+  {
+    name: "smart-money-dex-trades-base",
+    args: ["smart-money", "dex-trades", "--chain", "base"],
+    estimatedCredits: 50,
+  },
+  {
+    name: "smart-money-netflow-base",
+    args: ["smart-money", "netflow", "--chain", "base"],
+    estimatedCredits: 50,
+  },
+
   // Prediction Market domain (costs TBD, ~10-50cr each est.)
   {
     name: "pm-event-screener",

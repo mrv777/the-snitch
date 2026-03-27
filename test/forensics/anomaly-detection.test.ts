@@ -6,7 +6,7 @@ import type { TokenOhlcvRow } from "@/lib/nansen/types";
 
 function makeCandle(overrides: Partial<TokenOhlcvRow> = {}): TokenOhlcvRow {
   return {
-    timestamp: "2024-01-15T00:00:00Z",
+    interval_start: "2024-01-15T00:00:00Z",
     open: 1.0,
     high: 1.1,
     low: 0.95,
@@ -27,13 +27,13 @@ describe("detectAnomaly", () => {
     // Large-cap (>$100M) → threshold 20%
     const candles = [
       makeCandle({ open: 100, close: 105 }), // +5%
-      makeCandle({ open: 100, close: 95, timestamp: "2024-01-16T00:00:00Z" }), // -5%
+      makeCandle({ open: 100, close: 95, interval_start: "2024-01-16T00:00:00Z" }), // -5%
     ];
 
     expect(detectAnomaly(candles, 500_000_000)).toBeNull();
   });
 
-  it("detects pump in large-cap token (>20% threshold)", () => {
+  it("detects pump in large-cap token (>15% threshold)", () => {
     const candles = [
       makeCandle({ open: 100, close: 130, high: 135, volume: 50_000_000 }),
     ];
@@ -55,31 +55,31 @@ describe("detectAnomaly", () => {
     expect(result!.priceChangePct).toBe(-30);
   });
 
-  it("uses 50% threshold for mid-cap ($1M-$100M)", () => {
-    // 40% move should NOT trigger for mid-cap
-    const candles = [makeCandle({ open: 1.0, close: 1.4 })];
+  it("uses 25% threshold for upper-mid-cap ($10M-$100M)", () => {
+    // 20% move should NOT trigger for upper-mid-cap
+    const candles = [makeCandle({ open: 1.0, close: 1.2 })];
     expect(detectAnomaly(candles, 50_000_000)).toBeNull();
 
-    // 60% move SHOULD trigger
-    const bigCandles = [makeCandle({ open: 1.0, close: 1.6 })];
+    // 30% move SHOULD trigger
+    const bigCandles = [makeCandle({ open: 1.0, close: 1.3 })];
     const result = detectAnomaly(bigCandles, 50_000_000);
     expect(result).not.toBeNull();
-    expect(result!.priceChangePct).toBeCloseTo(60, 5);
+    expect(result!.priceChangePct).toBeCloseTo(30, 5);
   });
 
-  it("uses 100% threshold for micro-cap (<$1M)", () => {
-    // 80% move should NOT trigger for micro-cap
-    const candles = [makeCandle({ open: 0.001, close: 0.0018 })];
+  it("uses 50% threshold for micro-cap (<$1M)", () => {
+    // 40% move should NOT trigger for micro-cap
+    const candles = [makeCandle({ open: 0.001, close: 0.0014 })];
     expect(detectAnomaly(candles, 500_000)).toBeNull();
 
-    // 150% move SHOULD trigger
-    const bigCandles = [makeCandle({ open: 0.001, close: 0.0025 })];
+    // 60% move SHOULD trigger
+    const bigCandles = [makeCandle({ open: 0.001, close: 0.0016 })];
     const result = detectAnomaly(bigCandles, 500_000);
     expect(result).not.toBeNull();
   });
 
-  it("defaults to 50% threshold when market cap is undefined", () => {
-    const candles = [makeCandle({ open: 1.0, close: 1.6 })];
+  it("defaults to 35% threshold when market cap is undefined", () => {
+    const candles = [makeCandle({ open: 1.0, close: 1.4 })];
     const result = detectAnomaly(candles, undefined);
     expect(result).not.toBeNull();
   });
@@ -87,17 +87,17 @@ describe("detectAnomaly", () => {
   it("picks the most extreme anomaly when multiple exist", () => {
     const candles = [
       makeCandle({
-        timestamp: "2024-01-10T00:00:00Z",
+        interval_start: "2024-01-10T00:00:00Z",
         open: 1.0,
         close: 1.3,
       }), // +30%
       makeCandle({
-        timestamp: "2024-01-12T00:00:00Z",
+        interval_start: "2024-01-12T00:00:00Z",
         open: 1.3,
         close: 2.6,
       }), // +100%
       makeCandle({
-        timestamp: "2024-01-14T00:00:00Z",
+        interval_start: "2024-01-14T00:00:00Z",
         open: 2.6,
         close: 3.12,
       }), // +20%
@@ -120,7 +120,7 @@ describe("detectAnomaly", () => {
   it("populates all anomaly fields correctly", () => {
     const candles = [
       makeCandle({
-        timestamp: "2024-01-15T00:00:00Z",
+        interval_start: "2024-01-15T00:00:00Z",
         open: 10,
         close: 25,
         high: 28,

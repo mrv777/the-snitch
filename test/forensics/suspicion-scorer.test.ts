@@ -23,9 +23,9 @@ function makeWhoBoughtSold(
 ): WhoBoughtSoldRow {
   return {
     address: "0xaaaa000000000000000000000000000000000001",
-    action: "buy",
-    amount: 1000,
-    value_usd: 50_000,
+    bought_volume_usd: 50_000,
+    sold_volume_usd: 0,
+    trade_volume_usd: 50_000,
     ...overrides,
   };
 }
@@ -188,8 +188,8 @@ describe("computeSuspicionScore", () => {
       makeSuspect({ entityName: "Paradigm Capital Fund" }),
     ];
     const wbs = [
-      makeWhoBoughtSold({ entity_name: "Paradigm Capital Fund" }),
-      makeWhoBoughtSold({ entity_name: "Some Trader", address: "0xbbbb000000000000000000000000000000000002" }),
+      makeWhoBoughtSold({ address_label: "Paradigm Capital Fund" }),
+      makeWhoBoughtSold({ address_label: "Some Trader", address: "0xbbbb000000000000000000000000000000000002" }),
     ];
 
     const { evidence } = computeSuspicionScore({
@@ -207,8 +207,8 @@ describe("computeSuspicionScore", () => {
   it("scores smart money labels 20 for unlabeled suspects", () => {
     const suspects = [makeSuspect({ entityName: undefined, label: undefined })];
     const wbs = [
-      makeWhoBoughtSold({ entity_name: "Labeled Entity" }),
-      makeWhoBoughtSold({ entity_name: "Another One", address: "0xbbbb000000000000000000000000000000000002" }),
+      makeWhoBoughtSold({ address_label: "Labeled Entity" }),
+      makeWhoBoughtSold({ address_label: "Another One", address: "0xbbbb000000000000000000000000000000000002" }),
     ];
 
     const { evidence } = computeSuspicionScore({
@@ -229,8 +229,7 @@ describe("computeSuspicionScore", () => {
     const wbs = Array.from({ length: 10 }, (_, i) =>
       makeWhoBoughtSold({
         address: `0x${String(i).padStart(40, "0")}`,
-        entity_name: undefined,
-        label: undefined,
+        address_label: undefined,
       })
     );
 
@@ -265,8 +264,9 @@ describe("computeSuspicionScore", () => {
     expect(profit.subScore).toBe(100);
   });
 
-  it("scores profit magnitude 40 for 2-5x returns", () => {
-    const suspects = [makeSuspect({ pnlUsd: 100_000, pnlPercent: 300 })];
+  it("scores profit magnitude by max of pct and usd", () => {
+    // Small USD profit ($500) but 3x return → pctScore=40, usdScore=20 → max=40
+    const suspects = [makeSuspect({ pnlUsd: 500, pnlPercent: 300 })];
     const { evidence } = computeSuspicionScore({
       suspects,
       clusters: [],
@@ -277,6 +277,17 @@ describe("computeSuspicionScore", () => {
 
     const profit = evidence.find((e) => e.factor === "profit_magnitude")!;
     expect(profit.subScore).toBe(40);
+
+    // Large USD profit ($100K+) but small pct → pctScore=20, usdScore=80 → max=80
+    const bigUsd = [makeSuspect({ pnlUsd: 125_000, pnlPercent: 1 })];
+    const { evidence: ev2 } = computeSuspicionScore({
+      suspects: bigUsd,
+      clusters: [],
+      totalPreMoveVolume: 1_000_000,
+      whoBoughtSold: [],
+      hasConnectionData: false,
+    });
+    expect(ev2.find((e) => e.factor === "profit_magnitude")!.subScore).toBe(80);
   });
 
   it("produces HIGHLY_SUSPICIOUS total for maximum evidence", () => {
@@ -302,8 +313,8 @@ describe("computeSuspicionScore", () => {
       },
     ];
     const wbs = [
-      makeWhoBoughtSold({ entity_name: "Shadowy Fund Capital" }),
-      makeWhoBoughtSold({ entity_name: "Trader X", address: "0xbbbb000000000000000000000000000000000002" }),
+      makeWhoBoughtSold({ address_label: "Shadowy Fund Capital" }),
+      makeWhoBoughtSold({ address_label: "Trader X", address: "0xbbbb000000000000000000000000000000000002" }),
     ];
 
     const { score } = computeSuspicionScore({

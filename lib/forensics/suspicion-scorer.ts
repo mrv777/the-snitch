@@ -70,6 +70,11 @@ function scoreTiming(suspects: Suspect[]): { subScore: number; description: stri
   } else if (maxAdvantage > 0) {
     subScore = 40;
     tier = `${Math.round(maxAdvantage * 60)}min`;
+  } else if (suspects.length > 0) {
+    // Suspects exist but no timing data — likely data limitation
+    // (dex-trades only returns recent data, anomaly may be older)
+    subScore = 20;
+    tier = "no timing data available";
   } else {
     subScore = 0;
     tier = "no timing advantage";
@@ -166,7 +171,7 @@ function scoreSmartMoneyLabels(
   // Count how many who-bought-sold entries have labels
   const totalEntries = whoBoughtSold.length;
   const labeledEntries = whoBoughtSold.filter(
-    (r) => r.entity_name || r.label
+    (r) => r.address_label
   ).length;
   const labelsSparse = totalEntries === 0 || labeledEntries / totalEntries < 0.1;
 
@@ -216,7 +221,11 @@ function scoreSmartMoneyLabels(
     }
   }
 
-  const description = `${labeledSuspects.length}/${suspects.length} suspects are ${bestLabel}${labeledSuspects.length > 1 ? "s" : ""}`;
+  const plural = labeledSuspects.length > 1;
+  const labelText = bestLabel === "labeled entity"
+    ? (plural ? "labeled entities" : "a labeled entity")
+    : (plural ? `${bestLabel}s` : `a ${bestLabel}`);
+  const description = `${labeledSuspects.length}/${suspects.length} suspects are ${labelText}`;
   return { subScore: bestScore, description, labelsSparse };
 }
 
@@ -235,24 +244,41 @@ function scoreProfitMagnitude(
     return { subScore: 0, description: "No profit data available" };
   }
 
-  // Use pnlPercent as proxy for magnitude vs historical
+  // Score based on both percentage return AND absolute profit
   const maxPnlPct = Math.max(
     ...suspectsWithPnl.map((s) => Math.abs(s.pnlPercent ?? 0))
   );
+  const maxPnlUsd = Math.max(
+    ...suspectsWithPnl.map((s) => Math.abs(s.pnlUsd ?? 0))
+  );
 
-  let subScore: number;
-  if (maxPnlPct > 1000) subScore = 100; // >10x
-  else if (maxPnlPct > 500) subScore = 70; // 5-10x
-  else if (maxPnlPct > 200) subScore = 40; // 2-5x
-  else subScore = 20;
+  // Score by percentage
+  let pctScore: number;
+  if (maxPnlPct > 1000) pctScore = 100; // >10x
+  else if (maxPnlPct > 500) pctScore = 70;
+  else if (maxPnlPct > 200) pctScore = 40;
+  else pctScore = 20;
+
+  // Score by absolute USD profit
+  let usdScore: number;
+  if (maxPnlUsd > 500_000) usdScore = 100;
+  else if (maxPnlUsd > 100_000) usdScore = 80;
+  else if (maxPnlUsd > 10_000) usdScore = 60;
+  else if (maxPnlUsd > 1_000) usdScore = 40;
+  else usdScore = 20;
+
+  // Take the higher of the two — catches cases where pnlPercent is
+  // the wallet-wide rate (tiny) but absolute profit is significant
+  const subScore = Math.max(pctScore, usdScore);
 
   const topProfiter = suspectsWithPnl.sort(
     (a, b) => (b.pnlUsd ?? 0) - (a.pnlUsd ?? 0)
   )[0];
 
+  const pctLabel = maxPnlPct > 1 ? ` (${maxPnlPct.toFixed(0)}% return)` : "";
   const description =
     topProfiter.pnlUsd !== undefined
-      ? `Top suspect profited $${Math.round(topProfiter.pnlUsd).toLocaleString()} (${maxPnlPct.toFixed(0)}% return)`
+      ? `Top suspect profited $${Math.round(topProfiter.pnlUsd).toLocaleString()}${pctLabel}`
       : "Profit data incomplete";
 
   return { subScore, description };
@@ -285,6 +311,10 @@ export function computeSuspicionScore(input: ScoringInput): {
     wallet_connections: connections,
     smart_money_labels: labels,
     profit_magnitude: profit,
+    // PM factors (unused in token scoring, but needed for Record completeness)
+    position_timing: { subScore: 0, description: "" },
+    profit_concentration: { subScore: 0, description: "" },
+    track_record: { subScore: 0, description: "" },
   };
 
   const evidence: EvidenceItem[] = factors.map((f) => {

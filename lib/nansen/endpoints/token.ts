@@ -11,14 +11,38 @@ import type {
 type Chain = string;
 
 // #14 — token info (10 credits on free plan)
-export function tokenInfo(
+// The CLI returns a nested object: { data: { name, symbol, token_details: { market_cap_usd }, ... } }
+// We flatten it into our TokenInfoResponse shape.
+export async function tokenInfo(
   tokenAddress: string,
   chain: Chain
 ): Promise<NansenCliResponse<TokenInfoResponse>> {
-  return nansenCli<TokenInfoResponse>(
+  const res = await nansenCli<Record<string, unknown>>(
     ["token", "info", "--token", tokenAddress, "--chain", chain],
     `token-info:${chain}:${tokenAddress}`
   );
+
+  if (!res.success || !res.data) return { ...res, data: null as unknown as TokenInfoResponse };
+
+  // The CLI unwrapper may leave a nested `data` object for non-array responses
+  const raw = (res.data as Record<string, unknown>).data ?? res.data;
+  const info = raw as Record<string, unknown>;
+  const details = (info.token_details ?? {}) as Record<string, unknown>;
+  const metrics = (info.spot_metrics ?? {}) as Record<string, unknown>;
+
+  return {
+    success: true,
+    data: {
+      token_address: (info.contract_address as string) ?? tokenAddress,
+      token_name: (info.name as string) ?? "Unknown",
+      token_symbol: (info.symbol as string) ?? "???",
+      chain,
+      market_cap_usd: (details.market_cap_usd as number) ?? undefined,
+      price_usd: (info.price_usd as number) ?? undefined,
+      holder_count: (metrics.total_holders as number) ?? undefined,
+      volume_24h_usd: (metrics.volume_total_usd as number) ?? undefined,
+    },
+  };
 }
 
 // #13 — token ohlcv (10 credits on free plan)
