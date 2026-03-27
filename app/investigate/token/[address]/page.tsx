@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getInvestigationBySubject } from "@/lib/cache/queries";
-import { truncateAddress } from "@/lib/utils/address";
+import { truncateAddress, isEvmAddress } from "@/lib/utils/address";
 import type { ForensicReport } from "@/lib/forensics/types";
 import { InvestigationView } from "./investigation-view";
 
@@ -13,17 +13,24 @@ interface PageProps {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: PageProps): Promise<Metadata> {
   const { address } = await params;
-  const tokenAddress = decodeURIComponent(address);
+  const { chain } = await searchParams;
+  const rawAddress = decodeURIComponent(address);
+  // Normalize to match how the API stores addresses
+  const tokenAddress = isEvmAddress(rawAddress) ? rawAddress.toLowerCase() : rawAddress;
   const displayAddress = truncateAddress(tokenAddress);
 
   // Try to get cached report for richer metadata
-  const cached = getInvestigationBySubject(tokenAddress, "token");
+  const cached = getInvestigationBySubject(tokenAddress, "token", chain);
   if (cached) {
     try {
       const report: ForensicReport = JSON.parse(cached.report_json);
-      const title = `$${report.subject.symbol} — ${report.verdict?.replace("_", " ") ?? "Investigation"} | The Snitch`;
+      const symbol = report.subject.symbol && report.subject.symbol !== "???"
+        ? `$${report.subject.symbol}`
+        : displayAddress;
+      const title = `${symbol} — ${report.verdict?.replace("_", " ") ?? "Investigation"} | The Snitch`;
       const description =
         report.narrative?.shareableLine ??
         `Forensic investigation of ${displayAddress}`;
@@ -34,7 +41,7 @@ export async function generateMetadata({
         openGraph: {
           title,
           description,
-          url: `${siteUrl}/investigate/token/${encodeURIComponent(tokenAddress)}`,
+          url: `${siteUrl}/investigate/token/${encodeURIComponent(tokenAddress)}${chain ? `?chain=${chain}` : ""}`,
           images: report.caseId
             ? [`${siteUrl}/api/og/${report.caseId}?variant=forensic`]
             : undefined,
@@ -70,12 +77,13 @@ export default async function TokenInvestigationPage({
 }: PageProps) {
   const { address } = await params;
   const { chain } = await searchParams;
-  const tokenAddress = decodeURIComponent(address);
+  const rawAddr = decodeURIComponent(address);
+  const tokenAddress = isEvmAddress(rawAddr) ? rawAddr.toLowerCase() : rawAddr;
   const selectedChain = chain || "ethereum";
 
   // Check for cached report
   let cachedReport: ForensicReport | null = null;
-  const cached = getInvestigationBySubject(tokenAddress, "token");
+  const cached = getInvestigationBySubject(tokenAddress, "token", selectedChain);
   if (cached) {
     try {
       cachedReport = JSON.parse(cached.report_json);

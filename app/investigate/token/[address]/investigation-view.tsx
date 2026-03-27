@@ -436,6 +436,7 @@ export function InvestigationView({
                 `Investigation of ${report.subject.symbol}`
               }
               tokenSymbol={report.subject.symbol}
+              shareUrl={`/investigate/token/${encodeURIComponent(tokenAddress)}?chain=${chain}`}
               siteUrl={siteUrl}
             />
           </div>

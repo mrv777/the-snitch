@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import { investigateToken } from "@/lib/forensics/token-investigator";
-import { getInvestigationBySubject } from "@/lib/cache/queries";
+import { getInvestigationBySubject, updateInvestigationCardPaths } from "@/lib/cache/queries";
 import { checkRateLimit, recordInvestigation, getClientIp } from "@/lib/rate-limit/limiter";
 import { canAfford } from "@/lib/budget/tracker";
 import { isValidAddress, isEvmAddress, detectChain } from "@/lib/utils/address";
+import { renderBothCards } from "@/lib/image/renderer";
 import type { SSEEvent, ForensicReport } from "@/lib/forensics/types";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,13 @@ export async function POST(
 
         // Final event with complete report
         send({ type: "report_complete", data: report });
+
+        // Generate OG card images in the background (fire-and-forget)
+        renderBothCards(report.caseId)
+          .then(({ forensicPath, timelinePath }) => {
+            updateInvestigationCardPaths(report.caseId, forensicPath, timelinePath);
+          })
+          .catch((err) => console.error("Card render failed:", err));
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Investigation failed";

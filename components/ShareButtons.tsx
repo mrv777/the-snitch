@@ -6,6 +6,7 @@ interface Props {
   caseId: string;
   shareableLine: string;
   tokenSymbol: string;
+  shareUrl: string;
   siteUrl: string;
 }
 
@@ -13,12 +14,13 @@ export function ShareButtons({
   caseId,
   shareableLine,
   tokenSymbol,
+  shareUrl,
   siteUrl,
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const investigationUrl = `${siteUrl}/investigate/token/${caseId}`;
+  const investigationUrl = `${siteUrl}${shareUrl}`;
 
   const tweetText = encodeURIComponent(
     `${shareableLine}\n\nFull forensic report on $${tokenSymbol}:`

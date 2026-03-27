@@ -444,6 +444,7 @@ export function PredictionInvestigationView({
                 `PM investigation: ${report.subject.name}`
               }
               tokenSymbol={report.subject.outcome || "PM"}
+              shareUrl={`/investigate/prediction/${encodeURIComponent(eventId)}`}
               siteUrl={siteUrl}
             />
           </div>
