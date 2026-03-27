@@ -204,11 +204,11 @@ export function InvestigationView({
 
         <div className="mt-4 flex items-start justify-between gap-4">
           <div>
-            {report?.subject.symbol && (
-              <h1 className="text-2xl font-extrabold font-display uppercase tracking-tight">
-                ${report.subject.symbol}
-              </h1>
-            )}
+            <h1 className="text-2xl font-extrabold font-display uppercase tracking-tight">
+              {report?.subject.symbol && report.subject.symbol !== "???"
+                ? `$${report.subject.symbol}`
+                : truncateAddress(tokenAddress)}
+            </h1>
             <p className="mt-1 text-xs font-mono text-text-dim">
               {tokenAddress}
             </p>
@@ -447,7 +447,7 @@ export function InvestigationView({
               Duration: {(report.metadata.duration / 1000).toFixed(1)}s
             </span>
             <span>
-              Phases: {report.metadata.phasesCompleted.join(", ")}
+              Phases: {report.metadata.phasesCompleted.length}
             </span>
             {report.metadata.degradedSections.length > 0 && (
               <span className="text-verdict-amber">
