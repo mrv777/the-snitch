@@ -3,6 +3,8 @@ import type { ForensicReport } from "@/lib/forensics/types";
 import { LandingClient } from "./landing-client";
 import type { RecentInvestigation } from "@/components/RecentInvestigations";
 
+export const dynamic = "force-dynamic";
+
 function loadRecentInvestigations(): RecentInvestigation[] {
   try {
     const rows = getRecentInvestigations(20);
