@@ -3,7 +3,7 @@ import { investigateToken } from "@/lib/forensics/token-investigator";
 import { getInvestigationBySubject } from "@/lib/cache/queries";
 import { checkRateLimit, recordInvestigation, getClientIp } from "@/lib/rate-limit/limiter";
 import { canAfford } from "@/lib/budget/tracker";
-import { isValidAddress, detectChain } from "@/lib/utils/address";
+import { isValidAddress, isEvmAddress, detectChain } from "@/lib/utils/address";
 import type { SSEEvent, ForensicReport } from "@/lib/forensics/types";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +14,13 @@ export async function POST(
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
-  const tokenAddress = decodeURIComponent(address).trim();
+  const rawAddress = decodeURIComponent(address).trim();
   const chain =
     request.nextUrl.searchParams.get("chain") ||
-    detectChain(tokenAddress) ||
+    detectChain(rawAddress) ||
     "ethereum";
+  // Nansen API requires lowercase EVM addresses for OHLCV data
+  const tokenAddress = isEvmAddress(rawAddress) ? rawAddress.toLowerCase() : rawAddress;
 
   // Validate address
   if (!isValidAddress(tokenAddress)) {
@@ -113,7 +115,8 @@ export async function GET(
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
-  const tokenAddress = decodeURIComponent(address).trim();
+  const rawAddr = decodeURIComponent(address).trim();
+  const tokenAddress = isEvmAddress(rawAddr) ? rawAddr.toLowerCase() : rawAddr;
   const chain = request.nextUrl.searchParams.get("chain") || undefined;
 
   const cached = getInvestigationBySubject(tokenAddress, "token", chain);
